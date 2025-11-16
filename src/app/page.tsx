@@ -1,7 +1,10 @@
 "use client";
+import { Slider } from "@/components/ui/slider";
 import { useState, useEffect, useRef } from "react";
-
-// tipe untuk status dari API
+// import { ToggleButton } from "@/components/ToggleButton";
+import { Button } from "@/components/ui/button";
+import { RotateCcw, Loader2 } from "lucide-react";
+// Types for API status response
 interface StatusItem {
   code: string;
   value?: string | number | boolean;
@@ -15,7 +18,8 @@ interface StatusResponse {
 export default function LampControl() {
   const [isOn, setIsOn] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
-  const [brightness, setBrightness] = useState(500);
+  const [brightness, setBrightness] = useState(0);
+  const [temperature, setTemperature] = useState(0);
   const [color, setColor] = useState("#ffffff");
   const [mounted, setMounted] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -30,6 +34,7 @@ export default function LampControl() {
     try {
       const res = await fetch("/api/status");
       const data: StatusResponse = await res.json();
+
       if (data.success) {
         const switchStatus = data.all_status.find(
           (s) => s.code === "switch_led"
@@ -39,7 +44,12 @@ export default function LampControl() {
         const brightStatus = data.all_status.find(
           (s) => s.code === "bright_value_v2"
         );
-        setBrightness(Number(brightStatus?.value ?? 500));
+        setBrightness(Number(brightStatus?.value ?? 1000));
+
+        const tempStatus = data.all_status.find(
+          (s) => s.code === "temp_value_v2"
+        );
+        setTemperature(Number(tempStatus?.value ?? 1000));
 
         const colorStatus = data.all_status.find(
           (s) => s.code === "colour_data_v2"
@@ -64,6 +74,7 @@ export default function LampControl() {
     state?: boolean;
     brightness?: number;
     color?: string;
+    temperature?: number;
   }) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -75,11 +86,14 @@ export default function LampControl() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(control),
         });
+
         const data = await res.json();
         if (data.success) {
           if (control.state !== undefined) setIsOn(control.state);
           if (control.brightness !== undefined)
             setBrightness(control.brightness);
+          if (control.temperature !== undefined)
+            setTemperature(control.temperature);
           if (control.color) setColor(control.color);
         }
       } catch (err) {
@@ -91,56 +105,65 @@ export default function LampControl() {
   };
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-6 relative">
-      {loading && (
-        <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-10">
-          <span className="text-white font-semibold text-lg">Loading...</span>
-        </div>
-      )}
-
+    <main className="flex flex-col items-center justify-center h-dvh bg-gray-100 p-6 relative">
       <div className="bg-white p-8 rounded-3xl shadow-xl flex flex-col items-center gap-6 w-full max-w-md relative z-20">
-        <h1 className="text-3xl font-bold text-gray-800">Lampu Kamar</h1>
-        <div
-          className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-bold transition-colors duration-300 ${
-            isOn ? "bg-yellow-400" : "bg-gray-400"
-          }`}
+        <h1 className="text-3xl text-gray-800 font-sans font-normal">
+          Bedroom Light
+        </h1>
+
+        <button
+          onClick={() => sendControl({ state: !isOn })}
+          disabled={loading}
+          className={`
+    w-28 h-28 hover:cursor-pointer rounded-full flex items-center justify-center text-4xl font-bold
+    transition-all duration-300 shadow-lg active:scale-95
+    ${loading ? "opacity-50" : ""}
+    ${
+      isOn
+        ? "bg-linear-to-b from-yellow-200 to-yellow-400 text-yellow-700"
+        : "bg-linear-to-b from-gray-300 to-gray-500 text-gray-700"
+    }
+  `}
         >
           {isOn === null ? "..." : isOn ? "💡" : "⚫"}
-        </div>
+        </button>
 
-        <div className="flex gap-4">
-          <button
-            onClick={() => sendControl({ state: true })}
-            disabled={loading}
-            className="px-6 py-2 rounded-full bg-green-600 text-white font-semibold shadow hover:bg-green-700 transition disabled:opacity-50"
-          >
-            Nyalakan
-          </button>
-          <button
-            onClick={() => sendControl({ state: false })}
-            disabled={loading}
-            className="px-6 py-2 rounded-full bg-red-600 text-white font-semibold shadow hover:bg-red-700 transition disabled:opacity-50"
-          >
-            Matikan
-          </button>
-        </div>
+        {/* <ToggleButton
+          isOn={Boolean(isOn)}
+          loading={loading}
+          onToggle={(val) => sendControl({ state: val })}
+        /> */}
 
+        {/* Brightness */}
         <div className="flex flex-col gap-2 w-full">
           <label className="font-semibold text-gray-700">Brightness</label>
-          <input
-            type="range"
-            min={0}
+          <Slider
+            value={[brightness]}
             max={1000}
-            value={brightness}
-            onChange={(e) =>
-              sendControl({ brightness: parseInt(e.target.value) })
-            }
-            className="w-full"
+            min={10}
+            step={1}
+            onValueChange={(val) => setBrightness(val[0])}
+            onValueCommit={(val) => sendControl({ brightness: val[0] })}
+            className="w-full from-yellow-900 to-yellow-100"
             disabled={loading}
           />
         </div>
 
-        {mounted && (
+        {/* Temperature */}
+        <div className="flex flex-col gap-2 w-full">
+          <label className="font-semibold text-gray-700">Temperature</label>
+          <Slider
+            value={[temperature]}
+            max={1000}
+            step={1}
+            onValueChange={(val) => setTemperature(val[0])}
+            onValueCommit={(val) => sendControl({ temperature: val[0] })}
+            className="w-full from-yellow-500 to-slate-100"
+            disabled={loading}
+          />
+        </div>
+
+        {/* {mounted && (
           <div className="flex flex-col gap-2 w-full">
             <label className="font-semibold text-gray-700">Color</label>
             <input
@@ -151,21 +174,32 @@ export default function LampControl() {
               disabled={loading}
             />
           </div>
-        )}
+        )} */}
 
-        <button
+        <Button
           onClick={fetchStatus}
-          className="mt-4 text-sm text-blue-600 underline hover:text-blue-800 transition disabled:opacity-50"
           disabled={loading}
+          variant="outline"
+          className="flex mt-4 items-center hover:cursor-pointer gap-2"
         >
-          Refresh Status 🔄
-        </button>
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Refreshing...
+            </>
+          ) : (
+            <>
+              <RotateCcw className="h-4 w-4" />
+              Refresh
+            </>
+          )}
+        </Button>
       </div>
     </main>
   );
 }
 
-// HSV -> HEX
+// HSV → HEX conversion
 function hsvToHex(h: number, s: number, v: number) {
   h = h / 360;
   const i = Math.floor(h * 6);

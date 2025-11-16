@@ -6,9 +6,14 @@ export async function POST(request: NextRequest) {
     const {
       state,
       brightness,
+      temperature,
       color,
-    }: { state?: boolean; brightness?: number; color?: string } =
-      await request.json();
+    }: {
+      state?: boolean;
+      brightness?: number;
+      color?: string;
+      temperature?: number;
+    } = await request.json();
     const deviceId = process.env.TUYA_DEVICE_ID!;
     const commands: any[] = [];
 
@@ -16,6 +21,9 @@ export async function POST(request: NextRequest) {
       commands.push({ code: "switch_led", value: state });
     if (brightness !== undefined)
       commands.push({ code: "bright_value_v2", value: brightness });
+    if (temperature !== undefined)
+      commands.push({ code: "temp_value_v2", value: temperature });
+
     if (color) {
       const hsv = hexToHsv(color);
       commands.push({ code: "colour_data_v2", value: JSON.stringify(hsv) });
