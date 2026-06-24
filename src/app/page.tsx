@@ -5,14 +5,14 @@ import { Slider } from "@/components/ui/slider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Power, RefreshCw, Wifi, WifiOff, Sun, Thermometer,
-  Home, Loader2, SlidersHorizontal, X, Timer, Palette, Sparkles,
+  Home, Loader2, SlidersHorizontal, X, Clock, Palette, Sparkles, Plus, Trash2
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface StatusItem { code: string; value: string | number | boolean; }
 interface TuyaDevice { id: string; name: string; status: StatusItem[]; online: boolean; }
 interface HSV { h: number; s: number; v: number; }
-type ModalTab = "white" | "colour" | "scene" | "timer";
+type ModalTab = "white" | "colour" | "scene" | "schedule";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const CODES = {
@@ -144,6 +144,73 @@ function ControlPanel({
   const [sceneLoading, setSceneLoading] = useState<number | null>(null); // idx of loading scene
   const [sceneFeedback, setSceneFeedback] = useState<{ idx: number; ok: boolean; error?: string } | null>(null);
 
+  // Schedules state
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [schedLoading, setSchedLoading] = useState(false);
+  const [schedActionLoading, setSchedActionLoading] = useState<string | null>(null);
+  const [showAddSched, setShowAddSched] = useState(false);
+  const [newSchedTime, setNewSchedTime] = useState("08:00");
+  const [newSchedAction, setNewSchedAction] = useState<boolean>(true); // true = on, false = off
+
+  useEffect(() => {
+    if (activeTab === "schedule") fetchSchedules();
+  }, [activeTab]);
+
+  async function fetchSchedules() {
+    setSchedLoading(true);
+    try {
+      const res = await fetch(`/api/schedule?deviceId=${device.id}`);
+      const data = await res.json();
+      if (data.success) setSchedules(data.schedules);
+    } catch (e) { console.error(e); }
+    setSchedLoading(false);
+  }
+
+  async function handleToggleSchedule(timer_id: string, enable: boolean) {
+    haptic();
+    setSchedActionLoading(timer_id);
+    try {
+      await fetch(`/api/schedule`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId: device.id, timer_id, enable }),
+      });
+      await fetchSchedules();
+    } catch (e) { console.error(e); }
+    setSchedActionLoading(null);
+  }
+
+  async function handleDeleteSchedule(timer_id: string) {
+    haptic();
+    setSchedActionLoading(timer_id);
+    try {
+      await fetch(`/api/schedule?deviceId=${device.id}&timer_ids=${timer_id}`, { method: "DELETE" });
+      await fetchSchedules();
+    } catch (e) { console.error(e); }
+    setSchedActionLoading(null);
+  }
+
+  async function handleAddSchedule() {
+    haptic();
+    setSchedActionLoading("add");
+    try {
+      await fetch(`/api/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: device.id,
+          alias_name: newSchedAction ? "Turn On" : "Turn Off",
+          time: newSchedTime,
+          loops: "1111111", // Everyday
+          functions: [{ code: CODES.switch, value: newSchedAction }],
+        }),
+      });
+      setShowAddSched(false);
+      await fetchSchedules();
+    } catch (e) { console.error(e); }
+    setSchedActionLoading(null);
+  }
+
   const colourHex = hsvToHex(colH, colS / 1000, colV / 1000);
 
   function switchTab(tab: ModalTab) {
@@ -180,10 +247,10 @@ function ControlPanel({
   }
 
   const TABS: { id: ModalTab; label: string; icon: React.ReactNode }[] = [
-    { id: "white",  label: "White",  icon: <Sun      size={11} /> },
-    { id: "colour", label: "Colour", icon: <Palette  size={11} /> },
-    { id: "scene",  label: "Scene",  icon: <Sparkles size={11} /> },
-    { id: "timer",  label: "Timer",  icon: <Timer    size={11} /> },
+    { id: "white",    label: "White",    icon: <Sun      size={11} /> },
+    { id: "colour",   label: "Colour",   icon: <Palette  size={11} /> },
+    { id: "scene",    label: "Scene",    icon: <Sparkles size={11} /> },
+    { id: "schedule", label: "Schedule", icon: <Clock    size={11} /> },
   ];
 
   return (
@@ -407,41 +474,90 @@ function ControlPanel({
             </div>
           )}
 
-          {/* ── TIMER ── */}
-          {activeTab === "timer" && (
+          {/* ── SCHEDULE ── */}
+          {activeTab === "schedule" && (
             <div className="space-y-4">
-              {countdownVal > 0 ? (
-                <div style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", borderRadius: 16, padding: "16px" }}>
-                  <p className="text-xs font-medium mb-1" style={{ color: "#fbbf24" }}>⏱️ Timer Active</p>
-                  <p className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
-                    Light turns off in ~{Math.ceil(countdownVal / 60)} minutes
-                  </p>
-                </div>
-              ) : (
-                <div style={{ background: "var(--muted)", border: "1px solid var(--border)", borderRadius: 16, padding: "16px" }}>
-                  <p className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>No timer active</p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)", opacity: 0.6 }}>Choose a duration below</p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-2">
-                {TIMER_OPTIONS.map((opt) => (
-                  <button key={opt.value}
-                    onClick={() => onControl({ countdown: opt.value })}
-                    style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--foreground)", borderRadius: 12, padding: "12px", fontSize: 13, fontWeight: 500 }}
-                    className="hover:opacity-80 active:scale-95 transition-all">
-                    {opt.label}
-                  </button>
-                ))}
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>Cloud Schedules</p>
+                <button onClick={() => setShowAddSched(!showAddSched)}
+                  className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md active:scale-95 transition-all"
+                  style={{ background: showAddSched ? "var(--border)" : "var(--foreground)", color: showAddSched ? "var(--foreground)" : "var(--background)" }}>
+                  {showAddSched ? <X size={12} /> : <Plus size={12} />}
+                  {showAddSched ? "Cancel" : "Add"}
+                </button>
               </div>
 
-              {countdownVal > 0 && (
-                <button
-                  onClick={() => onControl({ countdown: 0 })}
-                  style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 12, width: "100%", padding: "10px 0", fontSize: 13, fontWeight: 500 }}
-                  className="hover:opacity-80 active:scale-95 transition-all">
-                  Cancel Timer
-                </button>
+              <AnimatePresence>
+                {showAddSched && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                    <div style={{ background: "var(--muted)", border: "1px solid var(--border)" }} className="p-4 rounded-2xl space-y-4 mb-4">
+                      <div>
+                        <label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--muted-foreground)" }}>Time</label>
+                        <input type="time" value={newSchedTime} onChange={e => setNewSchedTime(e.target.value)}
+                          style={{ background: "var(--card)", border: "1px solid var(--card-border)", color: "var(--foreground)" }}
+                          className="w-full p-2.5 rounded-xl text-sm font-semibold focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--muted-foreground)" }}>Action (Everyday)</label>
+                        <div className="flex gap-2">
+                          <button onClick={() => setNewSchedAction(true)}
+                            style={{ background: newSchedAction ? "rgba(251,191,36,0.15)" : "var(--card)", border: `1px solid ${newSchedAction ? "rgba(251,191,36,0.3)" : "var(--card-border)"}`, color: newSchedAction ? "#fbbf24" : "var(--muted-foreground)" }}
+                            className="flex-1 py-2 rounded-xl text-sm font-medium transition-all">Turn On</button>
+                          <button onClick={() => setNewSchedAction(false)}
+                            style={{ background: !newSchedAction ? "var(--card-on-border)" : "var(--card)", border: `1px solid ${!newSchedAction ? "var(--muted-foreground)" : "var(--card-border)"}`, color: !newSchedAction ? "var(--foreground)" : "var(--muted-foreground)" }}
+                            className="flex-1 py-2 rounded-xl text-sm font-medium transition-all">Turn Off</button>
+                        </div>
+                      </div>
+                      <button onClick={handleAddSchedule} disabled={schedActionLoading === "add"}
+                        style={{ background: "var(--foreground)", color: "var(--background)" }}
+                        className="w-full py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 active:scale-95 transition-all">
+                        {schedActionLoading === "add" ? "Saving..." : "Save Schedule"}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {schedLoading ? (
+                <div className="flex justify-center py-6"><Loader2 size={20} className="animate-spin text-muted-foreground" /></div>
+              ) : schedules.length === 0 ? (
+                <div className="text-center py-8">
+                  <Clock size={24} className="mx-auto mb-2 opacity-20" />
+                  <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>No schedules</p>
+                  <p className="text-xs mt-1" style={{ color: "var(--muted-foreground)" }}>Add one to automate this device</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {schedules.map((s: any) => {
+                    const isEnabled = s.enable;
+                    const actionFn = (s.functions || []).find((f: any) => f.code === CODES.switch);
+                    const isTurnOn = actionFn ? actionFn.value : false;
+
+                    return (
+                      <div key={s.timer_id} style={{ background: "var(--card)", border: "1px solid var(--border)", opacity: isEnabled ? 1 : 0.6 }} className="flex items-center justify-between p-4 rounded-2xl transition-opacity">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xl font-semibold tabular-nums" style={{ color: "var(--foreground)" }}>{s.time}</h4>
+                            <span style={{ background: isTurnOn ? "rgba(251,191,36,0.15)" : "var(--muted)", color: isTurnOn ? "#fbbf24" : "var(--muted-foreground)" }} className="text-[10px] px-2 py-0.5 rounded-md font-bold uppercase">
+                              {isTurnOn ? "ON" : "OFF"}
+                            </span>
+                          </div>
+                          <p className="text-xs font-medium mt-0.5" style={{ color: "var(--muted-foreground)" }}>{s.alias_name} • Everyday</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => handleDeleteSchedule(s.timer_id)} disabled={schedActionLoading === s.timer_id} className="p-2 text-red-500 hover:bg-red-500/10 rounded-full active:scale-90 transition-all disabled:opacity-50">
+                            {schedActionLoading === s.timer_id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                          </button>
+                          <button onClick={() => handleToggleSchedule(s.timer_id, !isEnabled)} disabled={schedActionLoading === s.timer_id}
+                            style={{ background: isEnabled ? "#10b981" : "var(--muted)", border: `1px solid ${isEnabled ? "#10b981" : "var(--border)"}` }}
+                            className="w-11 h-6 rounded-full flex items-center px-1 transition-colors disabled:opacity-50">
+                            <div style={{ transform: isEnabled ? "translateX(20px)" : "translateX(0)", background: isEnabled ? "white" : "var(--muted-foreground)" }} className="w-4 h-4 rounded-full transition-transform" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}
