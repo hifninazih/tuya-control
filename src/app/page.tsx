@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Slider } from "@/components/ui/slider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -106,6 +107,11 @@ function modeToTab(mode: string): ModalTab {
   if (mode === "scene")  return "scene";
   return "white";
 }
+function haptic() {
+  if (typeof navigator !== "undefined" && navigator.vibrate) {
+    navigator.vibrate(40);
+  }
+}
 
 // ─── ControlPanel ─────────────────────────────────────────────────────────────
 function ControlPanel({
@@ -141,12 +147,14 @@ function ControlPanel({
   const colourHex = hsvToHex(colH, colS / 1000, colV / 1000);
 
   function switchTab(tab: ModalTab) {
+    haptic();
     setActiveTab(tab);
     if (tab === "white")  onControl({ workMode: "white" });
     if (tab === "colour") onControl({ workMode: "colour", colourHsv: { h: colH, s: colS, v: colV } });
   }
 
   async function handleSceneClick(scene: typeof SCENE_PRESETS[0], idx: number) {
+    haptic();
     setSceneLoading(idx);
     setSceneFeedback(null);
     try {
@@ -179,14 +187,21 @@ function ControlPanel({
   ];
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       onClick={handleBackdrop}
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(8px)" }}
     >
-      <div
+      <motion.div
+        initial={{ y: "100%", opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: "100%", opacity: 0 }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
         style={{ background: "var(--card)", border: "1px solid var(--card-border)", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}
-        className="w-full max-w-sm rounded-3xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300"
+        className="w-full max-w-sm rounded-3xl overflow-hidden"
       >
         {/* Header */}
         <div className="px-6 pt-6 pb-4">
@@ -206,18 +221,24 @@ function ControlPanel({
           </div>
 
           {/* Tab pills */}
-          <div style={{ background: "var(--muted)", border: "1px solid var(--border)" }} className="flex rounded-xl p-1 gap-1">
+          <div style={{ background: "var(--muted)", border: "1px solid var(--border)" }} className="flex rounded-xl p-1 gap-1 relative">
             {TABS.map((tab) => (
               <button key={tab.id} onClick={() => switchTab(tab.id)}
                 style={{
-                  background: activeTab === tab.id ? "var(--card)" : "transparent",
                   color: activeTab === tab.id ? "var(--foreground)" : "var(--muted-foreground)",
-                  boxShadow: activeTab === tab.id ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
-                  transition: "all 0.2s ease",
+                  transition: "color 0.2s ease",
                 }}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium"
+                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium relative z-10"
               >
-                {tab.icon}{tab.label}
+                {activeTab === tab.id && (
+                  <motion.div
+                    layoutId="activeTabBg"
+                    className="absolute inset-0 rounded-lg"
+                    style={{ background: "var(--card)", boxShadow: "0 1px 4px rgba(0,0,0,0.15)" }}
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-1">{tab.icon}{tab.label}</span>
               </button>
             ))}
           </div>
@@ -425,8 +446,8 @@ function ControlPanel({
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -452,14 +473,21 @@ function DeviceCard({ device, onToggle, onOpenControls }: {
   const accent = isOn ? (colourHex || "#fbbf24") : null;
 
   return (
-    <div style={{
-      background: isOn
-        ? (colourHex ? `linear-gradient(145deg, ${colourHex}18, ${colourHex}08)` : "var(--card-on-bg)")
-        : "var(--card)",
-      border: `1px solid ${isOn ? (colourHex ? colourHex + "35" : "var(--card-on-border)") : "var(--card-border)"}`,
-      boxShadow: isOn ? `0 0 0 1px ${accent}20, 0 8px 24px rgba(0,0,0,0.1)` : "0 1px 3px rgba(0,0,0,0.06)",
-      transition: "all 0.4s ease",
-    }} className="rounded-2xl p-5 flex flex-col gap-4">
+    <motion.div 
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", damping: 25, stiffness: 300 }}
+      style={{
+        background: isOn
+          ? (colourHex ? `linear-gradient(145deg, ${colourHex}18, ${colourHex}08)` : "var(--card-on-bg)")
+          : "var(--card)",
+        border: `1px solid ${isOn ? (colourHex ? colourHex + "35" : "var(--card-on-border)") : "var(--card-border)"}`,
+        boxShadow: isOn ? `0 0 0 1px ${accent}20, 0 8px 24px rgba(0,0,0,0.1)` : "0 1px 3px rgba(0,0,0,0.06)",
+        transition: "all 0.4s ease",
+      }} 
+      className="rounded-2xl p-5 flex flex-col gap-4"
+    >
 
       {/* Top row */}
       <div className="flex items-center justify-between">
@@ -487,16 +515,20 @@ function DeviceCard({ device, onToggle, onOpenControls }: {
           </div>
         </div>
 
-        <button onClick={onToggle} disabled={!device.online}
+        <motion.button 
+          onClick={() => { haptic(); onToggle(); }} 
+          disabled={!device.online}
+          whileTap={{ scale: 0.85 }}
+          whileHover={{ scale: 1.05 }}
           style={{
             background: isOn ? (colourHex || "#fbbf24") : "var(--muted)",
             color: isOn ? "#09090b" : "var(--muted-foreground)",
             boxShadow: isOn ? `0 0 20px ${accent}45` : "none",
-            transition: "all 0.3s ease",
+            transition: "background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease",
           }}
-          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 disabled:opacity-30 disabled:cursor-not-allowed active:scale-90">
+          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 disabled:opacity-30 disabled:cursor-not-allowed">
           <Power size={16} strokeWidth={2.5} />
-        </button>
+        </motion.button>
       </div>
 
       {/* State badge */}
@@ -537,13 +569,17 @@ function DeviceCard({ device, onToggle, onOpenControls }: {
       )}
 
       {/* Full Controls button */}
-      <button onClick={onOpenControls} disabled={!device.online}
+      <motion.button 
+        onClick={() => { haptic(); onOpenControls(); }} 
+        disabled={!device.online}
+        whileHover={{ opacity: 0.8 }}
+        whileTap={{ scale: 0.97 }}
         style={{ background: "var(--border)", color: "var(--muted-foreground)", border: "1px solid var(--card-border)" }}
-        className="flex items-center justify-center gap-2 w-full py-2 rounded-xl text-xs font-medium disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-70 transition-opacity active:scale-95">
+        className="flex items-center justify-center gap-2 w-full py-2 rounded-xl text-xs font-medium disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
         <SlidersHorizontal size={12} />
         Full Controls
-      </button>
-    </div>
+      </motion.button>
+    </motion.div>
   );
 }
 
@@ -665,12 +701,14 @@ export default function Dashboard() {
   }
 
   async function allOn() {
+    haptic();
     for (const d of devices) {
       patchDevice(d.id, CODES.switch, true);
       await fetch("/api/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deviceId: d.id, state: true }) });
     }
   }
   async function allOff() {
+    haptic();
     for (const d of devices) {
       patchDevice(d.id, CODES.switch, false);
       await fetch("/api/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deviceId: d.id, state: false }) });
@@ -681,10 +719,46 @@ export default function Dashboard() {
     (d.status || []).some((s) => s.code === CODES.switch && s.value === true)
   );
 
+  // ── Ambient Background Glow ──
+  const activeColors = devices
+    .filter(d => getStatus(d, CODES.switch)?.value)
+    .map(d => {
+      const mode = getStatus(d, CODES.workMode)?.value;
+      if (mode === "colour") {
+        const cVal = getStatus(d, CODES.colour)?.value;
+        if (cVal) {
+          const c = parseColour(cVal);
+          return hsvToHex(c.h, c.s / 1000, c.v / 1000);
+        }
+      }
+      return "#fbbf24";
+    }).slice(0, 2);
+
   return (
-    <div className="relative z-10 min-h-screen flex flex-col">
+    <div className="relative z-10 min-h-screen flex flex-col overflow-hidden">
+      {/* Ambient Glow Effects */}
+      <div className="fixed inset-0 pointer-events-none z-0 transition-opacity duration-1000 opacity-15 md:opacity-[0.08]">
+        {activeColors.map((color, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute rounded-full blur-[90px] md:blur-[140px]"
+            style={{
+              background: color,
+              width: "70vw", height: "70vw",
+              top: i === 0 ? "-20%" : "auto",
+              bottom: i === 1 ? "-20%" : "auto",
+              left: i === 0 ? "-10%" : "auto",
+              right: i === 1 ? "-10%" : "auto",
+              transition: "background 2s ease",
+            }}
+          />
+        ))}
+      </div>
+
       {/* ── Header ── */}
-      <header style={{ borderBottom: "1px solid var(--header-border)" }} className="flex items-center justify-between px-6 py-4">
+      <header style={{ borderBottom: "1px solid var(--header-border)" }} className="relative z-10 flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2">
           <Home size={16} className="text-amber-400" />
           <span className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>Smart Home</span>
@@ -723,7 +797,7 @@ export default function Dashboard() {
       </header>
 
       {/* ── Body ── */}
-      <main className="flex-1 px-6 py-8 max-w-2xl mx-auto w-full">
+      <main className="relative z-10 flex-1 px-6 py-8 max-w-2xl mx-auto w-full">
         {/* Greeting */}
         <div className="mb-6">
           <h1 className="text-2xl font-semibold" style={{ color: "var(--foreground)" }}>{greeting}</h1>
@@ -753,9 +827,23 @@ export default function Dashboard() {
         )}
 
         {loading && (
-          <div className="flex flex-col items-center justify-center py-24 gap-4">
-            <Loader2 size={28} className="animate-spin" style={{ color: "var(--muted-foreground)" }} />
-            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>Connecting to your devices…</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[1, 2].map(i => (
+              <div key={i} className="rounded-2xl p-5 flex flex-col gap-4 animate-pulse" style={{ background: "var(--card)", border: "1px solid var(--card-border)" }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl" style={{ background: "var(--border)" }} />
+                    <div className="space-y-2">
+                      <div className="w-24 h-4 rounded" style={{ background: "var(--border)" }} />
+                      <div className="w-12 h-3 rounded" style={{ background: "var(--border)", opacity: 0.5 }} />
+                    </div>
+                  </div>
+                  <div className="w-10 h-10 rounded-full" style={{ background: "var(--border)" }} />
+                </div>
+                <div className="w-16 h-5 rounded-full" style={{ background: "var(--border)" }} />
+                <div className="w-full h-8 rounded-xl mt-2" style={{ background: "var(--border)", opacity: 0.7 }} />
+              </div>
+            ))}
           </div>
         )}
 
@@ -796,13 +884,15 @@ export default function Dashboard() {
       </footer>
 
       {/* ── Modal ── */}
-      {selected && (
-        <ControlPanel
-          device={selected}
-          onClose={() => setSelected(null)}
-          onControl={(payload) => handleControl(selected.id, payload)}
-        />
-      )}
+      <AnimatePresence>
+        {selected && (
+          <ControlPanel
+            device={selected}
+            onClose={() => setSelected(null)}
+            onControl={(payload) => handleControl(selected.id, payload)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
