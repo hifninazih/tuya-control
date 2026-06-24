@@ -554,6 +554,7 @@ export default function Dashboard() {
   const [sseStatus, setSseStatus]   = useState<"connecting" | "live" | "error">("connecting");
   const [selected, setSelected]     = useState<TuyaDevice | null>(null);
   const debounceRefs = useRef<Record<string, NodeJS.Timeout>>({});
+  const pendingLocks = useRef<Record<string, number>>({});
 
   const hour = new Date().getHours();
   const greeting = hour < 5 ? "Good Night" : hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
@@ -571,13 +572,29 @@ export default function Dashboard() {
       es.onmessage = (event) => {
         try {
           const { devices: fresh } = JSON.parse(event.data) as { devices: TuyaDevice[] };
-          setDevices(fresh);
+          const now = Date.now();
+          
+          setDevices(prev => {
+            return fresh.map(f => {
+              // Ignore SSE updates for devices that have pending optimistic updates (<4s old)
+              if (pendingLocks.current[f.id] && now - pendingLocks.current[f.id] < 4000) {
+                return prev.find(p => p.id === f.id) || f;
+              }
+              return f;
+            });
+          });
+          
           setLoading(false);
           setSseStatus("live");
-          // Keep modal in sync
-          setSelected((prev) =>
-            prev ? (fresh.find((d) => d.id === prev.id) ?? null) : null
-          );
+          
+          // Keep modal in sync, also respecting the lock
+          setSelected((prevSel) => {
+            if (!prevSel) return null;
+            if (pendingLocks.current[prevSel.id] && now - pendingLocks.current[prevSel.id] < 4000) {
+              return prevSel;
+            }
+            return fresh.find((d) => d.id === prevSel.id) ?? null;
+          });
         } catch { /* ignore parse errors */ }
       };
 
@@ -606,6 +623,9 @@ export default function Dashboard() {
   }
 
   function patchDevice(deviceId: string, code: string, value: string | number | boolean) {
+    // Mark device as "in-flight" so SSE doesn't overwrite our optimistic state
+    pendingLocks.current[deviceId] = Date.now();
+    
     const fn = (prev: TuyaDevice[]) =>
       prev.map((d) => d.id !== deviceId ? d : {
         ...d,
