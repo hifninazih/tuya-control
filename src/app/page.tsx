@@ -260,18 +260,28 @@ function ControlPanel({
       exit={{ opacity: 0 }}
       onClick={handleBackdrop}
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 sm:p-6"
-      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(8px)" }}
+      style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
     >
       <motion.div
         initial={{ y: "100%", opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: "100%", opacity: 0 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        style={{ background: "var(--card)", border: "1px solid var(--card-border)", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}
-        className="w-full max-w-sm rounded-3xl overflow-hidden"
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.2}
+        onDragEnd={(e, info) => {
+          if (info.offset.y > 100) onClose();
+        }}
+        style={{ background: "var(--card)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", border: "1px solid var(--card-border)", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}
+        className="w-full max-w-sm rounded-3xl overflow-hidden flex flex-col"
       >
+        {/* Drag Handle for mobile */}
+        <div className="w-full pt-3 pb-1 flex justify-center cursor-grab active:cursor-grabbing">
+          <div className="w-12 h-1.5 rounded-full" style={{ background: "var(--border)" }} />
+        </div>
         {/* Header */}
-        <div className="px-6 pt-6 pb-4">
+        <div className="px-6 pt-2 pb-4">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-base font-semibold" style={{ color: "var(--foreground)" }}>{device.name}</h2>
@@ -594,15 +604,18 @@ function DeviceCard({ device, onToggle, onOpenControls }: {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", damping: 25, stiffness: 300 }}
+      whileHover={{ y: -2 }}
       style={{
         background: isOn
-          ? (colourHex ? `linear-gradient(145deg, ${colourHex}18, ${colourHex}08)` : "var(--card-on-bg)")
+          ? (colourHex ? `linear-gradient(145deg, ${colourHex}25, ${colourHex}10)` : "var(--card-on-bg)")
           : "var(--card)",
-        border: `1px solid ${isOn ? (colourHex ? colourHex + "35" : "var(--card-on-border)") : "var(--card-border)"}`,
-        boxShadow: isOn ? `0 0 0 1px ${accent}20, 0 8px 24px rgba(0,0,0,0.1)` : "0 1px 3px rgba(0,0,0,0.06)",
-        transition: "all 0.4s ease",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: `1px solid ${isOn ? (colourHex ? colourHex + "45" : "var(--card-on-border)") : "var(--card-border)"}`,
+        boxShadow: isOn ? `0 0 0 1px ${accent}20, 0 12px 32px rgba(0,0,0,0.12)` : "0 4px 12px rgba(0,0,0,0.05)",
+        transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
       }} 
-      className="rounded-2xl p-5 flex flex-col gap-4"
+      className="rounded-2xl p-5 flex flex-col gap-4 group cursor-pointer"
     >
 
       {/* Top row */}
@@ -619,7 +632,7 @@ function DeviceCard({ device, onToggle, onOpenControls }: {
             </svg>
           </div>
           <div>
-            <p className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>{device.name}</p>
+              <p className="text-base font-semibold tracking-tight" style={{ color: "var(--foreground)" }}>{device.name}</p>
             <div className="flex items-center gap-1 mt-0.5">
               {device.online
                 ? <Wifi size={10} className="text-emerald-500" />
@@ -913,7 +926,7 @@ export default function Dashboard() {
       </header>
 
       {/* ── Body ── */}
-      <main className="relative z-10 flex-1 px-6 py-8 max-w-2xl mx-auto w-full">
+      <main className="relative z-10 flex-1 px-6 py-8 max-w-5xl mx-auto w-full">
         {/* Greeting */}
         <div className="mb-6">
           <h1 className="text-2xl font-semibold" style={{ color: "var(--foreground)" }}>{greeting}</h1>
@@ -942,56 +955,54 @@ export default function Dashboard() {
           </div>
         )}
 
-        {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[1, 2].map(i => (
-              <div key={i} className="rounded-2xl p-5 flex flex-col gap-4 animate-pulse" style={{ background: "var(--card)", border: "1px solid var(--card-border)" }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl" style={{ background: "var(--border)" }} />
-                    <div className="space-y-2">
-                      <div className="w-24 h-4 rounded" style={{ background: "var(--border)" }} />
-                      <div className="w-12 h-3 rounded" style={{ background: "var(--border)", opacity: 0.5 }} />
+        <AnimatePresence mode="wait">
+          {loading ? (
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="rounded-2xl p-5 flex flex-col gap-4 animate-pulse" style={{ background: "var(--card)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid var(--card-border)" }}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-xl" style={{ background: "var(--border)" }} />
+                      <div className="space-y-2">
+                        <div className="w-24 h-4 rounded" style={{ background: "var(--border)" }} />
+                        <div className="w-12 h-3 rounded" style={{ background: "var(--border)", opacity: 0.5 }} />
+                      </div>
                     </div>
+                    <div className="w-10 h-10 rounded-full" style={{ background: "var(--border)" }} />
                   </div>
-                  <div className="w-10 h-10 rounded-full" style={{ background: "var(--border)" }} />
+                  <div className="w-16 h-5 rounded-full" style={{ background: "var(--border)" }} />
+                  <div className="w-full h-8 rounded-xl mt-2" style={{ background: "var(--border)", opacity: 0.7 }} />
                 </div>
-                <div className="w-16 h-5 rounded-full" style={{ background: "var(--border)" }} />
-                <div className="w-full h-8 rounded-xl mt-2" style={{ background: "var(--border)", opacity: 0.7 }} />
+              ))}
+            </motion.div>
+          ) : devices.length === 0 ? (
+            <motion.div key="empty" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+              <div style={{ background: "var(--border)" }} className="w-16 h-16 rounded-2xl flex items-center justify-center mb-2">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" strokeWidth="1.5">
+                  <path d="M9 21h6m-6 0v-3m6 3v-3M9 18h6M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.19V18H9v-3.81A6 6 0 0 1 6 9a6 6 0 0 1 6-6z" />
+                </svg>
               </div>
-            ))}
-          </div>
-        )}
-
-        {!loading && devices.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-            <div style={{ background: "var(--border)" }} className="w-16 h-16 rounded-2xl flex items-center justify-center mb-2">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" strokeWidth="1.5">
-                <path d="M9 21h6m-6 0v-3m6 3v-3M9 18h6M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.19V18H9v-3.81A6 6 0 0 1 6 9a6 6 0 0 1 6-6z" />
-              </svg>
-            </div>
-            <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>No devices found</p>
-            <p className="text-xs max-w-xs" style={{ color: "var(--muted-foreground)" }}>Add Device IDs in <span style={{ color: "var(--foreground)" }}>src/lib/config.ts</span></p>
-          </div>
-        )}
-
-        {!loading && devices.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {devices.map((device) => (
-              <DeviceCard
-                key={device.id}
-                device={device}
-                onToggle={() => {
-                  const sw = (device.status || []).find((s) => s.code === CODES.switch);
-                  const isOn = sw ? Boolean(sw.value) : false;
-                  patchDevice(device.id, CODES.switch, !isOn);
-                  sendControl(device.id, { state: !isOn });
-                }}
-                onOpenControls={() => setSelected(device)}
-              />
-            ))}
-          </div>
-        )}
+              <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>No devices found</p>
+              <p className="text-xs max-w-xs" style={{ color: "var(--muted-foreground)" }}>Add Device IDs in <span style={{ color: "var(--foreground)" }}>src/lib/config.ts</span></p>
+            </motion.div>
+          ) : (
+            <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+              {devices.map((device) => (
+                <DeviceCard
+                  key={device.id}
+                  device={device}
+                  onToggle={() => {
+                    const sw = (device.status || []).find((s) => s.code === CODES.switch);
+                    const isOn = sw ? Boolean(sw.value) : false;
+                    patchDevice(device.id, CODES.switch, !isOn);
+                    sendControl(device.id, { state: !isOn });
+                  }}
+                  onOpenControls={() => setSelected(device)}
+                />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* ── Footer ── */}
